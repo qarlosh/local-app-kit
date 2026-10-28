@@ -27,7 +27,7 @@ macOS only for launchd; the rest works anywhere.
 From git, pinned to a version tag (there is no PyPI release):
 
 ```bash
-uv add git+https://github.com/qarlosh/local-app-kit@v0.1.0
+uv add git+https://github.com/qarlosh/local-app-kit@v0.1.1
 ```
 
 Requires Python 3.12+. It brings FastAPI and uvicorn.
@@ -73,7 +73,7 @@ hello = "hello.app:main"
 ## `LocalApp`
 
 ```python
-LocalApp(name, version, port, exposure="local", format_version=1, migrations={})
+LocalApp(name, version, port, exposure="local", format_version=1, migrations={}, launchd_extra={})
 ```
 
 The name sets everything else: environment variables start with `<PREFIX>_` (`my-app` ->
@@ -93,7 +93,7 @@ label is `local.<name>`.
   The CSP blocks anything the page loads from another site, FastAPI's `/docs` included (it
   loads Swagger UI from a CDN); `/openapi.json` still works. Serve scripts, styles and fonts
   from the app itself.
-- `kit.main(app)` is the app's command line:
+- `kit.main(app, commands={})` is the app's command line:
   - `serve` (the default): logs to the rotating file, migrates the data, then serves.
   - `install`: a LaunchAgent that runs `uv run --project <project> <script> serve` at login and
     restarts it if it stops. Run it from the project; it copies the terminal's `PATH` (so the
@@ -101,6 +101,11 @@ label is `local.<name>`.
   - `uninstall`: removes exactly what `install` added. The data stays.
   - `restart`: after changing the code.
   - `export [file.zip]`: every data file, without backups or logs.
+  - `commands` adds the app's own: `{"port": reserve_port}` runs `reserve_port(["new-app"])` for
+    `hello port new-app`. They cannot replace the ones above.
+- `launchd_extra` adds keys to the launchd agent, such as `{"AbandonProcessGroup": True}` for an
+  app that starts long-running commands, so a restart does not kill them. It cannot replace the
+  keys `install` sets.
 - `kit.data_dir`, `kit.log_file`, `kit.prepare()` (logging and migration, for apps that start
   uvicorn their own way).
 

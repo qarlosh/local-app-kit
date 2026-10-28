@@ -1,6 +1,6 @@
 [project]
 name = "local-app-kit"
-version = "0.1.0"
+version = "0.1.1"
 description = "The shared plumbing of small FastAPI apps that run on your own Mac: request guard, health, data folder, migrations, logs and launchd."
 readme = "README.md"
 license = "MIT"
