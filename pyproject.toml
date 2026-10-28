@@ -1,0 +1,22 @@
+[project]
+name = "local-app-kit"
+version = "0.1.0"
+description = "The shared plumbing of small FastAPI apps that run on your own Mac: request guard, health, data folder, migrations, logs and launchd."
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Carlos Herrero" }]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.162.0",
+    "uvicorn>=0.54.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.2.0",
+]
