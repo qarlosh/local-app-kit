@@ -31,6 +31,7 @@ class LocalApp:
     - `port`: where it listens, always on 127.0.0.1.
     - `exposure`: `local` (only this Mac) or `public` (also through a tunnel at `<PREFIX>_PUBLIC_HOST`).
     - `format_version` and `migrations`: see `data.migrate`; they run before serving.
+    - `launchd_extra`: more keys for the launchd agent; see `launchd.install`.
     """
 
     name: str
@@ -39,6 +40,7 @@ class LocalApp:
     exposure: str = "local"
     format_version: int = 1
     migrations: Mapping[int, data.Migration] = field(default_factory=dict)
+    launchd_extra: Mapping[str, Any] = field(default_factory=dict)
 
     def env(self, key: str, default: str | None = None) -> str | None:
         return os.environ.get(f"{data.env_prefix(self.name)}_{key}", default)
@@ -120,15 +122,33 @@ class LocalApp:
             working_dir=project,
             env=env,
             log_file=self.data_dir / data.LOGS / "launchd.log",
+            extra=self.launchd_extra,
         )
 
-    def main(self, app: FastAPI, argv: Sequence[str] | None = None) -> None:
+    def main(
+        self,
+        app: FastAPI,
+        argv: Sequence[str] | None = None,
+        commands: Mapping[str, Callable[[list[str]], None]] | None = None,
+    ) -> None:
         """Command line for the app's script: `serve` (default), `install`, `uninstall`,
-        `restart` and `export [file]`."""
+        `restart` and `export [file]`.
+
+        `commands` adds the app's own subcommands; each gets the arguments that follow its name.
+        """
+        own = dict(commands or {})
+        clash = sorted(set(own) & set(COMMANDS))
+        if clash:
+            raise ValueError(f"commands cannot replace {', '.join(clash)}")
         parser = argparse.ArgumentParser(prog=self.name)
-        parser.add_argument("command", nargs="?", default="serve", choices=COMMANDS)
-        parser.add_argument("file", nargs="?", type=Path, help="export: the zip to write")
+        parser.add_argument("command", nargs="?", default="serve", choices=(*COMMANDS, *own))
+        parser.add_argument("rest", nargs=argparse.REMAINDER, help="export: the zip to write")
         args = parser.parse_args(argv)
+        if args.command in own:
+            own[args.command](args.rest)
+            return
+        if len(args.rest) > (1 if args.command == "export" else 0):
+            parser.error(f"unexpected arguments for {args.command}: {' '.join(args.rest)}")
         url = f"http://127.0.0.1:{self.listen_port}{self.root_path}/"
         try:
             if args.command == "serve":
@@ -144,7 +164,7 @@ class LocalApp:
                 print(f"Restarted: {url}")
             else:
                 stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-                target = args.file or Path(f"{self.name}-export-{stamp}.zip")
+                target = Path(args.rest[0]) if args.rest else Path(f"{self.name}-export-{stamp}.zip")
                 print(f"Exported to {data.export_data(self.data_dir, target)}")
         except (launchd.LaunchdError, data.DataFormatError) as e:
             raise SystemExit(str(e)) from e

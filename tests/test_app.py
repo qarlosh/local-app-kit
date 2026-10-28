@@ -136,3 +136,34 @@ def test_export_command(tmp_path):
     kit.main(app, ["export", str(tmp_path / "out.zip")])
     with zipfile.ZipFile(tmp_path / "out.zip") as zf:
         assert zf.namelist() == ["items.json"]
+
+
+def test_install_adds_the_apps_launchd_keys(monkeypatch, tmp_path):
+    (tmp_path / "pyproject.toml").write_text("")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("shutil.which", lambda name: "/bin/uv")
+    monkeypatch.setattr(launchd, "_launchctl", lambda *a: launchd.subprocess.CompletedProcess(a, a[0] == "print", "", ""))
+    kit, app = make(launchd_extra={"AbandonProcessGroup": True})
+    kit.main(app, ["install"])
+    assert plistlib.loads(launchd.plist_path("local.my-app").read_bytes())["AbandonProcessGroup"] is True
+
+
+def test_own_commands_get_their_arguments():
+    kit, app = make()
+    calls = []
+    kit.main(app, ["port", "new-app", "--json"], commands={"port": calls.append})
+    assert calls == [["new-app", "--json"]]
+
+
+def test_own_commands_cannot_replace_the_built_in_ones():
+    kit, app = make()
+    with pytest.raises(ValueError, match="install"):
+        kit.main(app, ["install"], commands={"install": print})
+
+
+def test_unknown_command_and_stray_arguments_are_errors():
+    kit, app = make()
+    with pytest.raises(SystemExit):
+        kit.main(app, ["port"])
+    with pytest.raises(SystemExit):
+        kit.main(app, ["restart", "now"])
