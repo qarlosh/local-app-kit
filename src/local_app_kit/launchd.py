@@ -10,6 +10,7 @@ import subprocess
 import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
 
 class LaunchdError(RuntimeError):
@@ -63,10 +64,13 @@ def install(
     working_dir: Path,
     env: Mapping[str, str],
     log_file: Path,
+    extra: Mapping[str, Any] | None = None,
 ) -> Path:
     """Write the LaunchAgent and load it. Replaces an earlier install with the same label.
 
     `log_file` gets what the process prints outside the app's own logging (crashes at startup).
+    `extra` adds launchd keys, such as `{"AbandonProcessGroup": True}` so a restart does not kill
+    the processes the app started; it cannot replace the keys set here.
     """
     log_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     plist = {
@@ -79,6 +83,10 @@ def install(
         "StandardOutPath": str(log_file),
         "StandardErrorPath": str(log_file),
     }
+    clash = sorted(set(extra or {}) & set(plist))
+    if clash:
+        raise ValueError(f"extra cannot replace {', '.join(clash)}")
+    plist |= dict(extra or {})
     path = plist_path(label)
     path.parent.mkdir(parents=True, exist_ok=True)
     _remove(label)
